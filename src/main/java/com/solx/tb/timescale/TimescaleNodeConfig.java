@@ -18,18 +18,33 @@ package com.solx.tb.timescale;
 import org.thingsboard.rule.engine.api.NodeConfiguration;
 
 public class TimescaleNodeConfig implements NodeConfiguration<TimescaleNodeConfig> {
-    public String jdbcUrl;
+    // Simple, textbox-like fields users edit in TB UI:
+    public String host;
+    public int    port;
+    public String db;
+    public String schema;
+    public String table;
     public String user;
     public String password;
+
+    /** Optional: "disable", "require", "verify-ca", or "verify-full" */
+    public String sslMode;
+
+    /** Internal: built in init(); used by onMsg() */
     public String insertSql;
 
     @Override
     public TimescaleNodeConfig defaultConfiguration() {
         TimescaleNodeConfig c = new TimescaleNodeConfig();
-        c.jdbcUrl = "jdbc:postgresql://localhost:5432/iot?sslmode=disable";
+        c.host = "localhost";
+        c.port = 5432;
+        c.db = "iot";
+        c.schema = "public";
+        c.table = "telemetry";
         c.user = "postgres";
         c.password = "postgres";
-        c.insertSql = "INSERT INTO telemetry(ts, device_id, key, val) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING;";
+        c.sslMode = "disable";
+        c.insertSql = null; // set during node init
         return c;
     }
 }

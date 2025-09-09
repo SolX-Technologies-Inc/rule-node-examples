@@ -35,11 +35,11 @@ import java.sql.Timestamp;
 import java.util.Iterator;
 
 @RuleNode(
-        type = ComponentType.TRANSFORMATION,
+        type = ComponentType.ACTION,
         name = "Timescale Writer",
         configClazz = TimescaleNodeConfig.class,
         nodeDescription = "Write incoming telemetry to TimescaleDB (PostgreSQL JDBC)",
-        nodeDetails = "Accepts { ts, values:{k:v} } or plain {k:v}. Batches per message."
+        nodeDetails = "Accepts { ts, values:{k:v} } or plain {k:v}. Inserts one row per key."
 )
 public class TimescaleWriterNode implements TbNode {
 
@@ -50,8 +50,19 @@ public class TimescaleWriterNode implements TbNode {
     public void init(TbContext ctx, TbNodeConfiguration config) throws TbNodeException {
         cfg = TbNodeUtils.convert(config, TimescaleNodeConfig.class);
         try {
+            // Build JDBC URL dynamically from simple fields
+            String ssl = (cfg.sslMode == null || cfg.sslMode.isBlank()) ? "disable" : cfg.sslMode;
+            String jdbcUrl = String.format("jdbc:postgresql://%s:%d/%s?sslmode=%s",
+                    cfg.host, cfg.port, cfg.db, ssl);
+
+            // Build INSERT SQL once; uses schema + table from config
+            cfg.insertSql = String.format(
+                    "INSERT INTO %s.%s(ts, device_id, key, val) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING;",
+                    cfg.schema, cfg.table
+            );
+
             org.postgresql.ds.PGSimpleDataSource p = new org.postgresql.ds.PGSimpleDataSource();
-            p.setURL(cfg.jdbcUrl);
+            p.setURL(jdbcUrl);
             p.setUser(cfg.user);
             p.setPassword(cfg.password);
             this.ds = p;
@@ -83,7 +94,7 @@ public class TimescaleWriterNode implements TbNode {
                     JsonNode v = values.get(key);
                     String val = v.isTextual() ? v.asText() : v.toString();
 
-                    ps.setTimestamp(1, new Timestamp(tsMs)); // timestamptz/timestamp
+                    ps.setTimestamp(1, new Timestamp(tsMs)); // timestamp/timestamptz
                     ps.setString(2, originatorId);
                     ps.setString(3, key);
                     ps.setString(4, val);
