@@ -146,16 +146,20 @@ public class TimescaleWriterNode implements TbNode {
                         "thd_v_c_a", "thd_v_l_n", "thd_v_a", "thd_v_b", "thd_v_c"
                 };
 
+                boolean withValue = false;
                 for (int i = 0; i < columns.length; i++) {
                     String columnName = columns[i];
                     if (values.has(columnName) && values.get(columnName).isNumber()) {
                         ps.setBigDecimal(i + 4, new BigDecimal(values.get(columnName).asText()));
+                        withValue = true;
                     } else {
                         ps.setBigDecimal(i + 4, null);  // Set to NULL if value not present
                     }
                 }
 
-                ps.executeUpdate();
+                if (withValue) {
+                    ps.executeUpdate();
+                }
             }
 
             ctx.tellSuccess(msg);
