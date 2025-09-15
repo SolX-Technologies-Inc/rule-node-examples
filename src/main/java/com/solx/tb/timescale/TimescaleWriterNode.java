@@ -120,7 +120,12 @@ public class TimescaleWriterNode implements TbNode {
                     ? root.get("values") : root;
 
             try (PreparedStatement ps = c.prepareStatement(cfg.insertSql)) {
-                String originatorId = msg.getOriginator().getId().toString();
+                // String originatorId = msg.getOriginator().getId().toString();
+                String originatorId = msg.getMetaData().getValue("deviceName");
+                if (originatorId == null || originatorId.isBlank()) {
+                    originatorId = msg.getOriginator().getId().toString();
+                }
+
                 Timestamp timestamp = new Timestamp(tsMs);
 
                 // Set the basic fields
