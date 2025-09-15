@@ -1,0 +1,74 @@
+<!--
+
+    Copyright © 2018-2025 The Thingsboard Authors
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<div layout="column" class="md-padding">
+
+    <div layout="row" layout-xs="column" layout-wrap>
+        <md-input-container flex="50" flex-xs="100">
+            <label>Host</label>
+            <input ng-model="configuration.host" required>
+        </md-input-container>
+
+        <md-input-container flex="50" flex-xs="100">
+            <label>Port</label>
+            <input type="number" ng-model="configuration.port" required min="1">
+        </md-input-container>
+    </div>
+
+    <div layout="row" layout-xs="column" layout-wrap>
+        <md-input-container flex="33" flex-xs="100">
+            <label>Database</label>
+            <input ng-model="configuration.db" required>
+        </md-input-container>
+
+        <md-input-container flex="33" flex-xs="100">
+            <label>Schema</label>
+            <input ng-model="configuration.schema" required>
+        </md-input-container>
+
+        <md-input-container flex="34" flex-xs="100">
+            <label>Table</label>
+            <input ng-model="configuration.table" required>
+        </md-input-container>
+    </div>
+
+    <div layout="row" layout-xs="column" layout-wrap>
+        <md-input-container flex="50" flex-xs="100">
+            <label>User</label>
+            <input ng-model="configuration.user" required>
+        </md-input-container>
+
+        <md-input-container flex="50" flex-xs="100">
+            <label>Password</label>
+            <input type="password" ng-model="configuration.password" required>
+        </md-input-container>
+    </div>
+
+    <md-input-container>
+        <label>SSL Mode</label>
+        <md-select ng-model="configuration.sslMode" aria-label="SSL Mode">
+            <md-option value="disable">disable</md-option>
+            <md-option value="require">require</md-option>
+            <md-option value="verify-ca">verify-ca</md-option>
+            <md-option value="verify-full">verify-full</md-option>
+        </md-select>
+    </md-input-container>
+
+    <div class="md-caption" style="margin-top:8px;">
+        JDBC URL and INSERT SQL are generated automatically by the node during init().
+    </div>
+</div>

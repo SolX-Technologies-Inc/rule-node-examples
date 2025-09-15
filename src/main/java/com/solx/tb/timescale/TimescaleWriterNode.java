@@ -31,15 +31,19 @@ import org.thingsboard.server.common.msg.TbMsg;
 import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.math.BigDecimal;
 import java.util.Iterator;
 
 @RuleNode(
         type = ComponentType.ACTION,
         name = "Timescale Writer",
         configClazz = TimescaleNodeConfig.class,
-        nodeDescription = "Write incoming telemetry to TimescaleDB (PostgreSQL JDBC)",
-        nodeDetails = "Accepts { ts, values:{k:v} } or plain {k:v}. Inserts one row per key."
+        nodeDescription = "Write incoming telemetry to TimescaleDB existing table structure",
+        nodeDetails = "Maps telemetry data to existing table columns: meterid, datetime, insertdate, and measurement columns",
+        uiResources = {"static/rulenode/timescale-writer-config.js"},
+        configDirective = "tbTimescaleWriterConfig"
 )
 public class TimescaleWriterNode implements TbNode {
 
@@ -55,11 +59,9 @@ public class TimescaleWriterNode implements TbNode {
             String jdbcUrl = String.format("jdbc:postgresql://%s:%d/%s?sslmode=%s",
                     cfg.host, cfg.port, cfg.db, ssl);
 
-            // Build INSERT SQL once; uses schema + table from config
-            cfg.insertSql = String.format(
-                    "INSERT INTO %s.%s(ts, device_id, key, val) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING;",
-                    cfg.schema, cfg.table
-            );
+            // Build INSERT SQL for the existing table structure
+            // This will insert a single row with all telemetry data as columns
+            cfg.insertSql = buildInsertSql();
 
             org.postgresql.ds.PGSimpleDataSource p = new org.postgresql.ds.PGSimpleDataSource();
             p.setURL(jdbcUrl);
@@ -69,6 +71,38 @@ public class TimescaleWriterNode implements TbNode {
         } catch (Exception e) {
             throw new TbNodeException(e);
         }
+    }
+
+    private String buildInsertSql() {
+        // Build SQL for inserting into your existing table structure
+        StringBuilder sql = new StringBuilder();
+        sql.append("INSERT INTO ").append(cfg.schema).append(".").append(cfg.table).append(" (");
+        sql.append("meterid, datetime, insertdate");
+
+        // Add all the measurement columns
+        String[] columns = {
+                "i_avg", "i_a", "i_b", "i_c", "i_un_w", "i_un_a", "i_un_b", "i_un_c",
+                "v_l_l_avg", "v_a_b", "v_b_c", "v_c_a", "v_l_n_avg", "v_a", "v_b", "v_c",
+                "v_un_l_l_w", "v_un_a_b", "v_un_b_c", "v_un_c_a", "v_un_l_n_w", "v_un_a", "v_un_b", "v_un_c",
+                "kw_t", "kw_a", "kw_b", "kw_c", "kvar_t", "kvar_a", "kvar_b", "kvar_c",
+                "kva_t", "kva_a", "kva_b", "kva_c", "pf_t", "pf_a", "pf_b", "pf_c",
+                "dpf_t", "dpf_a", "dpf_b", "dpf_c", "f", "wh_r", "wh_d", "varh_r", "varh_d",
+                "vah_r", "vah_d", "last_dem", "pres_dem", "thd_i_a", "thd_i_b", "thd_i_c",
+                "thd_i_n", "thd_i_g", "tdd", "thd_v_l_l", "thd_v_a_b", "thd_v_b_c",
+                "thd_v_c_a", "thd_v_l_n", "thd_v_a", "thd_v_b", "thd_v_c"
+        };
+
+        for (String col : columns) {
+            sql.append(", ").append(col);
+        }
+
+        sql.append(") VALUES (?, ?, ?");
+        for (int i = 0; i < columns.length; i++) {
+            sql.append(", ?");
+        }
+        sql.append(") ON CONFLICT DO NOTHING");
+
+        return sql.toString();
     }
 
     @Override
@@ -87,20 +121,36 @@ public class TimescaleWriterNode implements TbNode {
 
             try (PreparedStatement ps = c.prepareStatement(cfg.insertSql)) {
                 String originatorId = msg.getOriginator().getId().toString();
+                Timestamp timestamp = new Timestamp(tsMs);
 
-                Iterator<String> it = values.fieldNames();
-                while (it.hasNext()) {
-                    String key = it.next();
-                    JsonNode v = values.get(key);
-                    String val = v.isTextual() ? v.asText() : v.toString();
+                // Set the basic fields
+                ps.setString(1, originatorId);  // meterid
+                ps.setTimestamp(2, timestamp);  // datetime
+                ps.setTimestamp(3, timestamp);  // insertdate
 
-                    ps.setTimestamp(1, new Timestamp(tsMs)); // timestamp/timestamptz
-                    ps.setString(2, originatorId);
-                    ps.setString(3, key);
-                    ps.setString(4, val);
-                    ps.addBatch();
+                // Set all measurement columns
+                String[] columns = {
+                        "i_avg", "i_a", "i_b", "i_c", "i_un_w", "i_un_a", "i_un_b", "i_un_c",
+                        "v_l_l_avg", "v_a_b", "v_b_c", "v_c_a", "v_l_n_avg", "v_a", "v_b", "v_c",
+                        "v_un_l_l_w", "v_un_a_b", "v_un_b_c", "v_un_c_a", "v_un_l_n_w", "v_un_a", "v_un_b", "v_un_c",
+                        "kw_t", "kw_a", "kw_b", "kw_c", "kvar_t", "kvar_a", "kvar_b", "kvar_c",
+                        "kva_t", "kva_a", "kva_b", "kva_c", "pf_t", "pf_a", "pf_b", "pf_c",
+                        "dpf_t", "dpf_a", "dpf_b", "dpf_c", "f", "wh_r", "wh_d", "varh_r", "varh_d",
+                        "vah_r", "vah_d", "last_dem", "pres_dem", "thd_i_a", "thd_i_b", "thd_i_c",
+                        "thd_i_n", "thd_i_g", "tdd", "thd_v_l_l", "thd_v_a_b", "thd_v_b_c",
+                        "thd_v_c_a", "thd_v_l_n", "thd_v_a", "thd_v_b", "thd_v_c"
+                };
+
+                for (int i = 0; i < columns.length; i++) {
+                    String columnName = columns[i];
+                    if (values.has(columnName) && values.get(columnName).isNumber()) {
+                        ps.setBigDecimal(i + 4, new BigDecimal(values.get(columnName).asText()));
+                    } else {
+                        ps.setBigDecimal(i + 4, null);  // Set to NULL if value not present
+                    }
                 }
-                ps.executeBatch();
+
+                ps.executeUpdate();
             }
 
             ctx.tellSuccess(msg);
@@ -109,5 +159,6 @@ public class TimescaleWriterNode implements TbNode {
         }
     }
 
-    @Override public void destroy() {}
+    @Override
+    public void destroy() {}
 }
